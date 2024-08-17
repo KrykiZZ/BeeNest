@@ -2,6 +2,7 @@ import { CreepRole, Roles } from "roles";
 import { Carrier } from "roles/carrier";
 import { Harvester } from "roles/harvester";
 import { ErrorMapper } from "utils/ErrorMapper";
+import { Traveler } from "utils/Traveler/Traveler";
 
 declare global {
     /*
@@ -19,10 +20,17 @@ declare global {
         log: any;
     }
 
+    interface RoomMemory {
+        avoid?: number
+    }
+
     interface CreepMemory {
+        homeRoomName: string,
         targetRoomName: string,
         role: CreepRole;
-        task: string;
+        task: string,
+        _trav?: {},
+        _travel?: {}
     }
 
     interface HarvesterMemory extends CreepMemory {
@@ -32,6 +40,10 @@ declare global {
     interface CarrierMemory extends CreepMemory {
         harvesterId: string,
         sourceId: string
+    }
+
+    interface BuilderMemory extends CreepMemory {
+        targetId?: string,
     }
 
     // Syntax for adding proprties to `global` (ex "global.log")
@@ -49,10 +61,25 @@ function getNearestSpawn(targetRoom: Room) : StructureSpawn {
     return rooms[0].find(FIND_MY_SPAWNS)[0]
 }
 
+Creep.prototype.travelTo = function(destination: RoomPosition|{pos: RoomPosition}, options?: TravelToOptions) {
+    return Traveler.travelTo(this, destination, options);
+};
+
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 export const loop = ErrorMapper.wrapLoop(() => {
     console.log(`Current game tick is ${Game.time}`);
+
+    if (Object.keys(Game.creeps).indexOf("test-builder") == -1) {
+        Game.spawns["Spawn1"].spawnCreep(Harvester.body, `test-builder`, {
+            memory: <BuilderMemory> ({
+                role: CreepRole.Builder,
+                task: "idle",
+                homeRoomName: Game.spawns["Spawn1"].room.name,
+                targetRoomName: Game.spawns["Spawn1"].room.name
+            })
+        });
+    }
 
     // Automatically delete memory of missing creeps
     for (const name in Memory.creeps) {
@@ -80,6 +107,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
                         role: CreepRole.Harvester,
                         task: "idle",
                         sourceId: source.id,
+                        homeRoomName: spawn.room.name,
                         targetRoomName: source.room.name
                     })
                 });
@@ -103,6 +131,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
                     memory: <CarrierMemory> ({
                         role: CreepRole.Carrier,
                         task: "idle",
+                        homeRoomName: spawn.room.name,
                         targetRoomName: harvester?.memory.targetRoomName,
                         sourceId: source.id,
                         harvesterId: harvester.id
@@ -111,12 +140,15 @@ export const loop = ErrorMapper.wrapLoop(() => {
 
                 console.log(`Spawning CARRIER for SOURCE ${source.id}: ${result == OK ? "SUCCESS" : `FAILED [${result}]`}.`);
             }
+            else (carrier.memory as CarrierMemory).harvesterId = harvester.id;
         }
     }
 
     for(const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
         Roles[creep.memory.role].run(creep);
+
+        creep.say(creep.memory.task);
     }
 
     // let requiredWorkers: { [type: CreepRole]: number } = { [CreepRole.Harvester]: 5 }

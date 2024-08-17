@@ -8,14 +8,13 @@ export const Harvester : IRole = {
         const memory = creep.memory as HarvesterMemory;
         if (creep.memory.task == "idle") {
             const carriers = creep.pos.findInRange(FIND_MY_CREEPS, 2, {
-                filter: x => x.memory.role == CreepRole.Carrier && (x.memory as CarrierMemory).harvesterId == creep.id
+                filter: x => x.memory.role == CreepRole.Carrier && x.memory.task == "collecting" && (x.memory as CarrierMemory).harvesterId == creep.id
             });
 
-            console.log(`Carriers: ${carriers.length}`)
             if (carriers.length > 0) {
                 const carrier = carriers[0];
                 const amount = carrier.store.getFreeCapacity(RESOURCE_ENERGY)
-                creep.drop(RESOURCE_ENERGY, amount);
+                creep.drop(RESOURCE_ENERGY, Math.min(creep.store.energy, amount))
             }
 
             if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
@@ -33,7 +32,7 @@ export const Harvester : IRole = {
             })[0];
 
             if (creep.harvest(source) == ERR_NOT_IN_RANGE)
-                creep.moveTo(source);
+                creep.travelTo(source);
         }
     },
 }
